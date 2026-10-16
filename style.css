@@ -1,0 +1,91 @@
+#board-container {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+}
+
+/*下側のa～f */#board-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+}
+
+/*下側のa～f */
+#file-labels {
+	width: 360px;
+        display: grid;
+        grid-template-columns: repeat(6, 60px);
+        margin-bottom: 5px;
+        font-size: 20px;
+        text-align: center;
+}
+
+/*左側の1～6と横並びにする*/
+#board-with-ranks {
+        display: flex;
+}
+
+/*左側の1～6 */
+#rank-labels {
+        display: grid;
+        grid-template-rows: repeat(6, 60px);
+        margin-right: 5px;
+        font-size: 20px;
+        text-align: center;
+        line-height: 60px;
+}
+
+/*盤面本体*/
+#board {
+	display: grid; /*要素をグリッドレイアウトにする*/
+	grid-template-columns: repeat(6, 60px); /*横に6列×60pxのマスを作る*/
+	grid-template-rows: repeat(6, 60px); /*縦に6行×60pxのマスを作る*/
+	gap: 2px; /*マス同士の間に2pxの隙間を入れる*/
+}
+
+#hands {
+	display: flex;
+	justify-content: space-around;
+	margin-top: 20px;
+}
+
+.hand-area {
+	text-align: center;
+}
+
+.pieces {
+	display: flex;
+	gap: 10px;
+	margin-top: 10px;
+}
+
+.piece-hand {
+	width: 40px;
+	height: 40px;
+	background-color: #f5f5f5;
+	border: 1px solid #aaa;
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	cursor: pointer;
+	font-size: 20px;
+}
+
+.square {
+	width: 60px;
+	height: 60px;
+	background-color: #f0d9b5;
+	border: 1px solid #333;
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	font-size: 20px;
+}
+
+.selected {
+	background-color: yellow;
+}
+
+.gote-piece {
+    transform: rotate(180deg);
+}
