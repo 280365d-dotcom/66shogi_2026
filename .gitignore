@@ -1,0 +1,7 @@
+# エンジンの実行ファイル
+engines/*
+!engines/.gitkeep
+
+# Python
+__pycache__/
+*.pyc
