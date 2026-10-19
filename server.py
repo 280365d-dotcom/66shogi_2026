@@ -1,6 +1,8 @@
 import platform # 今使っているPCがMacかWindowsか調べる
 import re # 文字列のパターンを調べる
 import subprocess # エンジンを別のプログラムとして起動する
+import threading
+from flask_sock import Sock
 from pathlib import Path # ファイルの場所を、OSの違いを気にせず扱う
 
 from flask import Flask, jsonify, request
@@ -22,6 +24,7 @@ LETTER_TO_NAME = {v: k for k, v in NAME_TO_LETTER.items()}
 
 # サーバーの本体を作る
 app = Flask(__name__) 
+sock = Sock(app)
 # 起動したエンジンを入れておく変数
 engine = None 
 
@@ -224,6 +227,63 @@ def get_legal_moves(proc, fen):
     if line.startswith("Nodes searched"):
       return moves
 
+# ブラウザから受け付けるエンジンのコマンド(これ以外は拒否する)
+ALLOWED_COMMANDS = {"position", "go", "stop", "d", "isready", "usinewgame"}
+
+
+def start_usi_engine():
+    """USIモードでエンジンを起動し、66将棋のルールを読み込ませる"""
+    proc = subprocess.Popen(
+        [str(engine_path())],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        encoding="utf-8",
+        bufsize=1,
+    )
+    send(proc, "usi")
+    read_until(proc, "usiok")  # 起動時のオプション一覧は読み捨てる
+    send(proc, f"setoption name VariantPath value {VARIANT_FILE}")
+    send(proc, f"setoption name UCI_Variant value {VARIANT_NAME}")
+    send(proc, "isready")
+    lines = read_until(proc, "readyok")
+    if not any("ranks 6" in line for line in lines):
+        proc.kill()
+        raise RuntimeError("66将棋のルールを読み込めませんでした")
+    return proc
+
+
+@sock.route("/ws")
+def ws_engine(ws):
+    """ブラウザ(WebSocket)とエンジンの間で、コマンドを中継する"""
+    proc = start_usi_engine()  # 接続ごとに、専用のエンジンを1つ起動する
+
+    def pump():
+        """エンジンの出力を、1行ずつブラウザへ送る"""
+        for raw in proc.stdout:
+            try:
+                ws.send(raw.rstrip("\r\n"))
+            except Exception:
+                break
+
+    threading.Thread(target=pump, daemon=True).start()
+
+    try:
+        while True:
+            message = ws.receive()
+            if message is None:
+                break
+            for command in message.splitlines():  # 複数行を一度に送られても1行ずつ検査する
+                command = command.strip()
+                if command.split(" ")[0] in ALLOWED_COMMANDS:
+                    send(proc, command)
+                else:
+                    ws.send(f"info string 受け付けないコマンド: {command}")
+    except Exception:
+        pass  # ブラウザが閉じられたときなど
+    finally:
+        proc.kill()  # 接続が終わったら、エンジンも終了する
 
 print("__name__ の中身:", __name__)
 # 直接実行した時に実行する(importを除く)
