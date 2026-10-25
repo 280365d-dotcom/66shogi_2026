@@ -32,26 +32,20 @@ ws.onmessage = e => {
             );
 
         if (match) {
-
-            console.log(
-                "追加:",
-                match[1]
-            );
-
             legalMoves.push(
                 match[1]
             );
         }
     }
 
-    if (
-        text.includes("Nodes searched")
-    ) {
-
+    if (text.includes("Nodes searched")) {
         console.log(
             "合法手一覧:",
             legalMoves
         );
+        if (legalMoves.length === 0) {
+            alert((turn === "sente" ? "後手" : "先手") + "の勝ち！");
+        }
     }
 
     //初期化

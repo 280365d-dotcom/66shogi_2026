@@ -5,12 +5,13 @@
 }
 
 #file-labels {
-    width: 360px;
+    width: 400px;
     display: grid;
     grid-template-columns: repeat(6, 60px);
     margin-bottom: 5px;
     font-size: 20px;
     text-align: center;
+    gap: 2px;
 }
 
 #board-with-ranks {
@@ -24,6 +25,7 @@
     font-size: 20px;
     text-align: center;
     line-height: 60px;
+    gap: 2px;
 }
 
 #board {
@@ -37,7 +39,7 @@
     width: 60px;
     height: 60px;
     background-color: #f0d9b5;
-    border: 1px solid #333;
+    border: 2px solid #333;
     display: flex;
     justify-content: center;
     align-items: center;
@@ -51,8 +53,8 @@
 #sente-pieces button,
 #gote-pieces button {
 
-    width: 70px;
-    height: 70px;
+    width: 60px;
+    height: 60px;
 
     font-size: 32px;
     font-weight: bold;
@@ -65,4 +67,29 @@
 
     cursor: pointer;
 
+}
+
+#game-area {
+    display: grid;
+
+    grid-template-columns:
+        220px
+        auto
+        220px;
+
+    width: fit-content;
+    margin: 0 auto;
+}
+#gote-hand {
+    align-self: start;
+    margin-top: 10px;
+}
+#sente-hand {
+    align-self: end;
+    margin-top: 250px;
+}
+.pieces {
+    display: grid;
+    grid-template-columns: repeat(3, 70px);
+    gap: 5px;
 }
