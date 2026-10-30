@@ -1,85 +1,104 @@
-console.log("engine.js loaded");
+const { spawn } = require("child_process");
 
-const ws =
-    new WebSocket(
-        "ws://localhost:8080"
-    );
+class Engine {
 
-ws.onopen = () => {
-    console.log("connected");
-    ws.send("usi");
-};
+    // log を true にすると、エンジンとのやり取りを全部表示する
+    constructor(enginePath, { log = false } = {}) {
+        this.path = enginePath;
+        this.log = log;
+        this.process = null;
+        this.buffer = "";          // 途中で切れた行を溜めておく場所
+        this.listeners = [];       // 1行届くたびに呼ぶ関数の一覧
+    }
 
-ws.onerror = () => {
-    console.log("socket error");
-};
+    // 実行プログラム（process）の起動
+    start() {
+        this.process = spawn(this.path);
 
-ws.onmessage = e => {
-
-    const text = e.data;
-
-    console.log(text);
-
-    // ---- 合法手解析 ----
-
-    const lines = text.split("\n");
-
-    for (const line of lines) {
-
-        const match =
-            line.trim().match(/^([A-Za-z0-9*+]+):\s*1$/);
-
-        if (match) {
-            legalMoves.push(match[1]);
-        }
-        // ---- C++ の AI からの返事（例: "bestmove 2b2c"） ----
-        if (line.startsWith("bestmove")) {
-
-            // スペースで区切って2つ目を取り出す → "2b2c"
-            const move = line.trim().split(" ")[1];
-
-            console.log("AIの手:", move);
-
-            // 投了なら何もしない
-            if (move == "resign") {
-                continue;
+        this.process.stdout.on("data", (data) => {
+            // 届いた分を溜めて、改行までそろった行だけ処理する
+            this.buffer += data.toString();
+            const lines = this.buffer.split("\n");
+            this.buffer = lines.pop();                 // 最後の未完成の行は次回へ
+            for (const raw of lines) {
+                const line = raw.trim();               // Windows の \r も取り除く
+                if (line === "") continue;
+                if (this.log) console.log("[ENGINE]", line);
+                for (const listener of [...this.listeners]) {
+                    listener(line);
+                }
             }
+        });
 
-            // 今の局面で指せない手なら、反映しない（局面がズレてるサイン）
-            if (!legalMoves.includes(move)) {
-                console.error("AI が今の局面で指せない手を返しました:", move);
-                legalMovesReady = true;   // もう一度押せるように戻す
-                continue;
+        this.process.stderr.on("data", (data) => {
+            console.error("[ERROR]", data.toString());
+        });
+
+        this.process.on("error", (err) => {
+            console.error("エンジンを起動できません:", err.message);
+        });
+
+        this.process.on("exit", (code) => {
+            if (this.log) console.log(`Engine Exit : ${code}`);
+            this.process = null;
+        });
+    }
+
+    // 実行プログラム（process）に対して command の文字列を送信する
+    send(command) {
+        if (this.log) console.log("[SEND]", command);
+        this.process.stdin.write(command + "\n");
+    }
+
+    // 条件に合う行が届くまで待つ  例: await this.waitFor(line => line === "usiok")
+    waitFor(match) {
+        return new Promise((resolve) => {
+            const listener = (line) => {
+                if (match(line)) {
+                    this.listeners = this.listeners.filter(l => l !== listener);
+                    resolve(line);
+                }
+            };
+            this.listeners.push(listener);
+        });
+    }
+
+    // usi → setoption → isready → usinewgame を、返事を待ちながら順番に送る
+    async init(options = {}) {
+
+        this.send("usi");
+        await this.waitFor(line => line === "usiok");
+
+        for (const name in options) {
+            this.send(`setoption name ${name} value ${options[name]}`);
+        }
+
+        this.send("isready");
+        await this.waitFor(line => line === "readyok");
+
+        this.send("usinewgame");
+    }
+
+    // 局面を送って考えさせ、bestmove の手を返す
+    async go(position, time = 1000) {
+        this.send(position);
+        const wait = this.waitFor(line => line.startsWith("bestmove"));
+        this.send(`go btime 0 wtime 0 byoyomi ${time}`);
+        const line = await wait;
+        return line.split(" ")[1];
+    }
+
+    // プログラムの終了（quit を送り、終わらなければ強制終了）
+    stop() {
+        if (!this.process) return;
+        this.send("quit");
+        setTimeout(() => {
+            if (this.process) {
+                console.log("終了しないので強制終了します");
+                this.process.kill();
             }
-
-            applyMove(move);
-        }
+        }, 1000);
     }
+}
 
-
-
-    if (text.includes("Nodes searched")) {
-        legalMovesReady = true;
-        console.log("合法手一覧:", legalMoves);
-        if (legalMoves.length === 0) {
-            alert((turn === "sente" ? "後手" : "先手") + "の勝ち！");
-        }
-        if (mode === "battle" && !gameOver && turn === aiSide) {
-            setTimeout(askAI, 300);
-        }
-    }
-
-    //初期化
-    if (text.includes("usiok")) {
-        ws.send("setoption name VariantPath value 66shogi.ini");
-        ws.send("setoption name USI_Variant value 66shogi");
-        ws.send("setoption name RandomMove value true"); // 追加
-        ws.send("isready");
-        ws.send("position startpos");
-        ws.send("d");
-    }
-
-    if (text.includes("readyok")) {
-        console.log("66将棋エンジン準備完了");
-    }
-};
+module.exports = Engine;
