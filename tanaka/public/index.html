@@ -9,10 +9,38 @@
 
     <h1>66将棋</h1>
 
-    <!-- エンジンの選択と操作 -->
+    <!-- エンジンの選択（engines フォルダにあるもの） -->
+    <div class="engine-select">
+        <div class="engine-box">
+            <label>▲先手 <select id="sente-engine"></select></label>
+            <details>
+                <summary>オプション</summary>
+                <div id="sente-options" class="options"></div>
+            </details>
+        </div>
+        <div class="engine-box">
+            <label>△後手 <select id="gote-engine"></select></label>
+            <details>
+                <summary>オプション</summary>
+                <div id="gote-options" class="options"></div>
+            </details>
+        </div>
+        <button id="refresh-button">エンジンの一覧を更新</button>
+    </div>
+
+    <!-- 対局の設定 -->
+    <div class="settings">
+        <label>対局数 <input type="number" id="games" min="1" max="1000" value="1"></label>
+        <label><input type="checkbox" id="swap" checked> 1局ごとに先後を入れ替える</label>
+        <label><input type="checkbox" id="random-each"> 1局ごとにランダムに配置する</label>
+        <label>考える時間 <input type="number" id="byoyomi" min="0.1" step="0.1" value="1"> 秒</label>
+        <label>1手の最低時間 <input type="number" id="min-time" min="0" step="0.1" value="0.3"> 秒</label>
+    </div>
+
+    <!-- 操作 -->
     <div class="controls">
-        <label>先手 <select id="sente-engine"></select></label>
-        <label>後手 <select id="gote-engine"></select></label>
+        <button id="random-button">ランダム配置</button>
+        <button id="reset-button">配置をやり直す</button>
         <button id="start-button">対局開始</button>
         <button id="stop-button">中断</button>
     </div>
@@ -24,14 +52,14 @@
     <div class="game">
 
         <div class="hand-area gote-side">
-            <h3>△後手の持ち駒</h3>
+            <h3 id="gote-hand-title">△後手の持ち駒</h3>
             <div id="gote-hand" class="pieces"></div>
         </div>
 
         <div id="board"></div>
 
         <div class="hand-area sente-side">
-            <h3>▲先手の持ち駒</h3>
+            <h3 id="sente-hand-title">▲先手の持ち駒</h3>
             <div id="sente-hand" class="pieces"></div>
         </div>
 
@@ -42,7 +70,20 @@
 
     </div>
 
+    <!-- 対局結果 -->
+    <div class="results-area">
+        <h3>対局結果</h3>
+        <p id="summary">まだ対局していません</p>
+        <table id="results">
+            <thead>
+                <tr><th>局</th><th>先手</th><th>後手</th><th>勝ち</th><th>理由</th><th>手数</th></tr>
+            </thead>
+            <tbody id="results-body"></tbody>
+        </table>
+    </div>
+
     <script src="board.js"></script>
+    <script src="placement.js"></script>
     <script src="app.js"></script>
 </body>
 </html>

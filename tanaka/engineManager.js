@@ -51,6 +51,10 @@ class EngineManager extends EventEmitter {
         let turn = startSfen.split(" ")[1] === "b" ? "sente" : "gote";
         this.stopped = false;
 
+        // 新しい対局が始まることを、両方のエンジンに知らせる
+        this.engines.sente.send("usinewgame");
+        this.engines.gote.send("usinewgame");
+
         while (true) {
 
             // 途中で止められた
@@ -122,6 +126,11 @@ class EngineManager extends EventEmitter {
         const result = { winner, reason, moves };
         this.emit("end", result);
         return result;
+    }
+
+    // 先手と後手のエンジンを入れ替える（連続対局で先後を交代するため）
+    swapSides() {
+        [this.engines.sente, this.engines.gote] = [this.engines.gote, this.engines.sente];
     }
 
     // 対局を途中で止める（次の手番で止まる）

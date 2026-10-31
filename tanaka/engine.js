@@ -34,6 +34,9 @@ class Engine {
             console.error("[ERROR]", data.toString());
         });
 
+        // 起動できなかったときに、書き込みのエラーでプログラム全体が止まらないようにする
+        this.process.stdin.on("error", () => {});
+
         this.process.on("error", (err) => {
             console.error("エンジンを起動できません:", err.message);
         });

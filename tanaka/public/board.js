@@ -99,7 +99,9 @@ class Board {
     }
 
     // 盤と持ち駒を画面に描く
-    render(boardElement, senteHandElement, goteHandElement) {
+    // onCellClick：マスがクリックされたときに呼ぶ関数（配置のときに使う）
+    // drawHands：false にすると持ち駒を描かない（配置のときは別のものを表示するため）
+    render(boardElement, senteHandElement, goteHandElement, { onCellClick = null, drawHands = true } = {}) {
 
         boardElement.innerHTML = "";
 
@@ -115,6 +117,11 @@ class Board {
 
                 const cell = makeDiv("cell", "");
                 const piece = this.cells[rank][col];
+
+                if (onCellClick) {
+                    cell.classList.add("clickable");
+                    cell.addEventListener("click", () => onCellClick(rank, col));
+                }
 
                 if (this.lastMove && this.lastMove.rank === rank && this.lastMove.col === col) {
                     cell.classList.add("last");
@@ -134,8 +141,34 @@ class Board {
         }
 
         // 持ち駒：駒の形のタイルで並べる
-        renderHand(senteHandElement, this.hands.sente);
-        renderHand(goteHandElement, this.hands.gote);
+        if (drawHands) {
+            renderHand(senteHandElement, this.hands.sente);
+            renderHand(goteHandElement, this.hands.gote);
+        }
+    }
+
+    // 今の盤面を SFEN にする（持ち駒なし・先手番）
+    // 例: "lsgkbn/pppppp/6/6/PPPPPP/NBKGSL b - 1"
+    toSfen() {
+        const rows = this.cells.map(cells => {
+            let text = "";
+            let empty = 0;
+            for (const piece of cells) {
+                if (!piece) {
+                    empty++;
+                    continue;
+                }
+                if (empty > 0) {
+                    text += empty;
+                    empty = 0;
+                }
+                const letter = piece.side === "sente" ? piece.type : piece.type.toLowerCase();
+                text += (piece.promoted ? "+" : "") + letter;
+            }
+            if (empty > 0) text += empty;
+            return text;
+        });
+        return rows.join("/") + " b - 1";
     }
 }
 
