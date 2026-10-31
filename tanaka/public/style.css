@@ -1,0 +1,68 @@
+body { font-family: sans-serif; margin: 24px; }
+
+.controls { margin-bottom: 8px; }
+
+h3 { font-size: 15px; margin: 0 0 8px; }
+
+/* 後手の持ち駒｜盤｜先手の持ち駒｜棋譜 を横に並べる */
+.game { display: flex; gap: 20px; align-items: stretch; }
+
+/* ---- 盤：筋の番号の行 ＋ 6×6 のマス、右に段の番号 ---- */
+#board {
+    display: grid;
+    grid-template-columns: repeat(6, 60px) 28px;
+    grid-template-rows: 24px repeat(6, 60px);
+    width: max-content;
+}
+
+.label { display: flex; align-items: center; justify-content: center; color: #666; font-size: 15px; }
+
+.cell {
+    border: 1px solid #555;
+    margin: -1px 0 0 -1px;              /* 線を重ねて1本に見せる */
+    background: #f0d9b5;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 30px;
+}
+
+.cell.last { background: #f7c873; }    /* 最後に動いたマス */
+.gote { transform: rotate(180deg); }    /* 後手の駒は逆さまに */
+.promoted { color: #c0392b; }           /* 成った駒は赤 */
+
+/* ---- 持ち駒：前の GUI と同じ、駒の形のタイル ---- */
+.hand-area { width: 150px; display: flex; flex-direction: column; }
+.gote-side { justify-content: flex-start; }   /* 後手は上に寄せる */
+.sente-side { justify-content: flex-end; }    /* 先手は下に寄せる */
+
+.pieces { display: flex; flex-wrap: wrap; gap: 6px; min-height: 48px; }
+
+.hand-piece {
+    position: relative;
+    width: 44px; height: 44px;
+    background: #f3d9a4;
+    border: 2px solid #333;
+    border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 26px; font-weight: bold;
+}
+
+.count {                                 /* 2枚以上のときの枚数 */
+    position: absolute; right: -6px; bottom: -6px;
+    background: #333; color: #fff;
+    font-size: 12px; font-weight: normal;
+    border-radius: 9px; padding: 0 5px;
+}
+
+.empty { color: #999; font-size: 13px; }
+
+/* ---- 棋譜 ---- */
+.kifu-area { width: 170px; display: flex; flex-direction: column; }
+
+#kifu {
+    margin: 0; padding: 4px 8px 4px 40px;
+    height: 380px; overflow-y: auto;       /* 長くなったらスクロール */
+    border: 1px solid #ccc; border-radius: 4px;
+    font-size: 15px; line-height: 1.8;
+}
+
+#kifu li.latest { background: #f7c873; }  /* 最新の手 */

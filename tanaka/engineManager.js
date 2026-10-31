@@ -15,9 +15,11 @@ class EngineManager extends EventEmitter {
     // byoyomi：1手に考える時間（ミリ秒）
     // maxMoves：この手数を超えたら引き分け
     // log：true にすると、エンジンとのやり取りを全部表示する
-    constructor({ byoyomi = 1000, maxMoves = 200, log = false } = {}) {
+    // minMoveTime：1手に最低かける時間（ミリ秒）。画面で動きを見やすくするため
+    constructor({ byoyomi = 1000, maxMoves = 200, log = false, minMoveTime = 0 } = {}) {
         super();
         this.log = log;
+        this.minMoveTime = minMoveTime;
         this.byoyomi = byoyomi;
         this.maxMoves = maxMoves;
         this.engines = { sente: null, gote: null };
@@ -65,12 +67,20 @@ class EngineManager extends EventEmitter {
             const position = "position sfen " + startSfen
                 + (moves.length > 0 ? " moves " + moves.join(" ") : "");
 
+            const startTime = Date.now();   // 考え始めた時刻
+
             let move;
             try {
                 move = await this.goWithTimeout(this.engines[turn], position);
             } catch (err) {
                 // 時間内に手が返ってこなかった → その側の負け
                 return this.finish(opponent(turn), sideName(turn) + "の時間切れ", moves);
+            }
+
+            // 最低の時間に足りなければ、残りの時間だけ待つ
+            const elapsed = Date.now() - startTime;
+            if (elapsed < this.minMoveTime) {
+                await new Promise(resolve => setTimeout(resolve, this.minMoveTime - elapsed));
             }
 
             // 投了 → その側の負け

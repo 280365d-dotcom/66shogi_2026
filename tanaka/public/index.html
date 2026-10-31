@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>66将棋</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <h1>66将棋</h1>
+
+    <!-- エンジンの選択と操作 -->
+    <div class="controls">
+        <label>先手 <select id="sente-engine"></select></label>
+        <label>後手 <select id="gote-engine"></select></label>
+        <button id="start-button">対局開始</button>
+        <button id="stop-button">中断</button>
+    </div>
+
+    <!-- 状態の表示 -->
+    <p id="status">サーバーに接続しています…</p>
+
+    <!-- 後手の持ち駒｜盤｜先手の持ち駒｜棋譜 -->
+    <div class="game">
+
+        <div class="hand-area gote-side">
+            <h3>△後手の持ち駒</h3>
+            <div id="gote-hand" class="pieces"></div>
+        </div>
+
+        <div id="board"></div>
+
+        <div class="hand-area sente-side">
+            <h3>▲先手の持ち駒</h3>
+            <div id="sente-hand" class="pieces"></div>
+        </div>
+
+        <div class="kifu-area">
+            <h3>棋譜</h3>
+            <ol id="kifu"></ol>
+        </div>
+
+    </div>
+
+    <script src="board.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
