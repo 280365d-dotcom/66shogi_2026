@@ -97,3 +97,28 @@ details summary { cursor: pointer; font-size: 13px; color: #555; margin-top: 4px
 #results th, #results td { border: 1px solid #ccc; padding: 3px 10px; }
 #results th { background: #f4f4f4; }
 #results td.win { font-weight: bold; }
+
+/* 棋譜の区切り（配置と対局の間） */
+#kifu li.separator {
+    list-style: none;
+    color: #888;
+    margin: 4px 0;
+}
+
+/* 配置AIの選択 */
+.engine-box .placer {
+    display: block;
+    margin-top: 4px;
+}
+
+/* 配置AIのコンパイルエラー（エラーがないときは表示しない） */
+#placer-errors {
+    color: #b23a2e;
+    background: #fff4f2;
+    padding: 8px;
+    font-size: 12px;
+    white-space: pre-wrap;
+}
+#placer-errors:empty {
+    display: none;
+}

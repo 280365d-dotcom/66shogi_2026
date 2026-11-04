@@ -13,6 +13,9 @@ function send(data) {
 // 画面の部品
 const senteSelect = document.getElementById("sente-engine");
 const goteSelect = document.getElementById("gote-engine");
+const sentePlacerSelect = document.getElementById("sente-placer");
+const gotePlacerSelect = document.getElementById("gote-placer");
+const placerErrors = document.getElementById("placer-errors");
 const senteOptions = document.getElementById("sente-options");
 const goteOptions = document.getElementById("gote-options");
 const refreshButton = document.getElementById("refresh-button");
@@ -29,7 +32,7 @@ const goteHandTitle = document.getElementById("gote-hand-title");
 const kifuList = document.getElementById("kifu");
 const gamesInput = document.getElementById("games");
 const swapInput = document.getElementById("swap");
-const randomEachInput = document.getElementById("random-each");
+const placementModeSelect = document.getElementById("placement-mode");
 const byoyomiInput = document.getElementById("byoyomi");
 const minTimeInput = document.getElementById("min-time");
 const summaryText = document.getElementById("summary");
@@ -43,6 +46,9 @@ const placement = new Placement();
 
 // 対局中の盤面
 let board = null;
+
+// 今の対局の名前（「第1局／10局　先手 … ／ 後手 …」）
+let gameTitle = "";
 
 // engines フォルダにあるエンジンの一覧（サーバーから届く）
 let engineList = [];
@@ -148,9 +154,12 @@ function draw() {
     refreshButton.disabled = mode === "playing";
     senteSelect.disabled = mode === "playing";
     goteSelect.disabled = mode === "playing";
-    // 1局ごとにランダムに配置するなら、自分で配置していなくても始められる
-    startButton.disabled = mode !== "placement" || !(placement.isComplete() || randomEachInput.checked);
-    for (const input of [gamesInput, swapInput, randomEachInput, byoyomiInput, minTimeInput]) {
+    // 配置AIは「配置AIが配置する」のときだけ選べる
+    sentePlacerSelect.disabled = mode === "playing" || placementModeSelect.value !== "ai";
+    gotePlacerSelect.disabled = mode === "playing" || placementModeSelect.value !== "ai";
+    // ランダムやエンジンが配置するなら、自分で配置していなくても始められる
+    startButton.disabled = mode !== "placement" || !(placement.isComplete() || placementModeSelect.value !== "manual");
+    for (const input of [gamesInput, swapInput, placementModeSelect, byoyomiInput, minTimeInput]) {
         input.disabled = mode === "playing";
     }
     stopButton.disabled = mode !== "playing";
@@ -218,13 +227,63 @@ ws.onmessage = e => {
         draw();
     }
 
+    // 配置AIの一覧 → メニューを作る（コンパイルできなかったものは選べない）
+    if (data.type === "placers") {
+        for (const select of [sentePlacerSelect, gotePlacerSelect]) {
+            const before = select.value;
+            select.innerHTML = "";
+
+            const none = document.createElement("option");
+            none.value = "";
+            none.textContent = "なし（ランダム）";
+            select.appendChild(none);
+
+            for (const placer of data.list) {
+                const option = document.createElement("option");
+                option.value = placer.file;
+                option.textContent = placer.ok ? placer.file : `${placer.file}（コンパイル失敗）`;
+                option.disabled = !placer.ok;
+                select.appendChild(option);
+            }
+            if (data.list.some(p => p.file === before && p.ok)) select.value = before;
+        }
+
+        // コンパイルエラーがあれば、その内容を表示する
+        placerErrors.textContent = data.list
+            .filter(p => !p.ok)
+            .map(p => `【${p.file} のコンパイルエラー】\n${p.error}`)
+            .join("\n");
+        draw();
+    }
+
     // 1局が始まった → その局の開始局面から盤を作る
     if (data.type === "started") {
         mode = "playing";
         board = new Board(data.sfen);
         kifuList.innerHTML = "";
         draw();
-        statusText.textContent = `第${data.game}局／${data.total}局　対局中：先手 ${data.sente} ／ 後手 ${data.gote}`;
+        gameTitle = `第${data.game}局／${data.total}局　先手 ${data.sente} ／ 後手 ${data.gote}`;
+        statusText.textContent = (data.placing ? "配置中：" : "対局中：") + gameTitle;
+    }
+
+    // エンジンが1枚置いた → 盤に置いて、棋譜に「配置」として追加する
+    // 例: data.place = "K*4f"
+    if (data.type === "place") {
+        const square = data.place.slice(2, 4);
+        const to = Board.toIndex(square);
+        board.cells[to.rank][to.col] = { type: data.place[0], side: data.side, promoted: false };
+        board.lastMove = to;
+        draw();
+        addKifu((data.side === "sente" ? "▲" : "△") + Board.squareName(square) + PIECE_NAME[data.place[0]]
+            + "（配置" + (data.random ? "・ランダム" : "") + "）");
+    }
+
+    // 配置が終わった → 対局開始
+    if (data.type === "placed") {
+        board = new Board(data.sfen);
+        draw();
+        addKifu("― 対局開始 ―", { separator: true });
+        statusText.textContent = "対局中：" + gameTitle;
     }
 
     // 1手指された → 盤面に反映して描き直し、棋譜に追加する
@@ -272,13 +331,20 @@ function addResult(data) {
 }
 
 // 棋譜に1手追加して、一番下までスクロールする
-function addKifu(text) {
+// separator: true のときは区切りの行（番号なし）。その次の手から番号を 1 に戻す
+function addKifu(text, { separator = false } = {}) {
     const previous = kifuList.querySelector(".latest");
     if (previous) previous.classList.remove("latest");
 
     const item = document.createElement("li");
     item.textContent = text;
-    item.classList.add("latest");
+    if (separator) {
+        item.classList.add("separator");
+    } else {
+        item.classList.add("latest");
+        const last = kifuList.lastElementChild;
+        if (last && last.classList.contains("separator")) item.value = 1;
+    }
     kifuList.appendChild(item);
 
     kifuList.scrollTop = kifuList.scrollHeight;
@@ -306,12 +372,12 @@ resetButton.addEventListener("click", () => {
 startButton.addEventListener("click", () => {
     send({
         type: "start",
-        sente: { file: senteSelect.value, options: readOptions(senteOptions) },
-        gote: { file: goteSelect.value, options: readOptions(goteOptions) },
+        sente: { file: senteSelect.value, options: readOptions(senteOptions), placer: sentePlacerSelect.value },
+        gote: { file: goteSelect.value, options: readOptions(goteOptions), placer: gotePlacerSelect.value },
         sfen: placement.board.toSfen(),   // 配置した局面から対局する
         games: Number(gamesInput.value),
         swap: swapInput.checked,
-        randomPlacement: randomEachInput.checked,
+        placementMode: placementModeSelect.value,
         byoyomi: Math.round(Number(byoyomiInput.value) * 1000),
         minMoveTime: Math.round(Number(minTimeInput.value) * 1000),
     });
@@ -320,8 +386,8 @@ startButton.addEventListener("click", () => {
     summaryText.textContent = "対局中…";
 });
 
-// 「ランダムに配置する」を切り替えたら、対局開始ボタンを押せるか更新する
-randomEachInput.addEventListener("change", draw);
+// 配置のしかたを切り替えたら、対局開始ボタンを押せるか更新する
+placementModeSelect.addEventListener("change", draw);
 
 refreshButton.addEventListener("click", () => {
     send({ type: "refresh" });

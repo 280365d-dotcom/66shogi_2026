@@ -91,6 +91,16 @@ class Engine {
         return line.split(" ")[1];
     }
 
+    // 配置AI：今の配置を送って、次に置く駒とマスを返す  例: "K*4f"
+    // placement が分からないプログラム（Unknown command と返す）のときは null を返す
+    async place(goteRow, senteRow, side) {
+        const wait = this.waitFor(line => line.startsWith("bestplace") || line.startsWith("Unknown command"));
+        this.send(`placement ${goteRow} ${senteRow} ${side === "sente" ? "b" : "w"}`);
+        const line = await wait;
+        if (!line.startsWith("bestplace")) return null;
+        return line.split(" ")[1];
+    }
+
     // プログラムの終了（quit を送り、終わらなければ強制終了）
     stop() {
         if (!this.process) return;

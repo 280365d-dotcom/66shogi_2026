@@ -4,6 +4,7 @@ const path = require("path");
 const WebSocket = require("ws");
 const EngineManager = require("./engineManager");
 const { listEngines, enginePath } = require("./engineRegistry");
+const { listPlacers, placerPath } = require("./placerRegistry");
 
 const PORT = 8080;
 const PUBLIC_DIR = path.join(__dirname, "public");
@@ -11,6 +12,9 @@ const RESULTS_DIR = path.join(__dirname, "results");   // 対局結果を保存�
 
 // 画面から局面が届かなかったときに使う、配置が終わったあとの局面
 const DEFAULT_SFEN = "lsgkbn/pppppp/6/6/PPPPPP/NBKGSL b - 1";
+
+// 配置する前の局面（歩だけが並んでいる）
+const PLACEMENT_START_SFEN = "6/pppppp/6/6/PPPPPP/6 b - 1";
 
 // 画面から届いた局面が、66将棋の SFEN として正しい形か調べる
 function isValidSfen(sfen) {
@@ -109,12 +113,16 @@ wss.on("connection", ws => {
     console.log("画面がつながりました");
 
     // engines フォルダを調べて、エンジンの一覧を画面に知らせる
+    // あわせて placers フォルダの .cpp をコンパイルして、配置AIの一覧も知らせる
     async function sendEngineList() {
         engineList = await listEngines();
         send(ws, { type: "engines", list: engineList });
+        placerList = await listPlacers();
+        send(ws, { type: "placers", list: placerList });
     }
 
     let engineList = [];
+    let placerList = [];
     sendEngineList();
 
     ws.on("message", async msg => {
@@ -129,12 +137,12 @@ wss.on("connection", ws => {
 
         // ---- 対局開始 ----
         // 例: { type: "start",
-        //       sente: { file: "greedy-ai", options: { RandomMove: "true" } },
+        //       sente: { file: "greedy-ai", options: { RandomMove: "true" }, placer: "random.cpp" },
         //       gote:  { file: "fairy-stockfish-mac", options: {} },
         //       sfen: "...",            配置した局面
         //       games: 10,              対局数
         //       swap: true,             1局ごとに先後を入れ替えるか
-        //       randomPlacement: true,  1局ごとにランダムに配置するか
+        //       placementMode: "ai",    配置のしかた："manual"（画面で配置した局面）/ "random"（1局ごとにランダム）/ "ai"（配置AIが1枚ずつ交互に配置）
         //       byoyomi: 1000,          1手に考える時間（ミリ秒）
         //       minMoveTime: 300 }      1手に最低かける時間（ミリ秒）
         if (data.type === "start") {
@@ -152,10 +160,23 @@ wss.on("connection", ws => {
                 return;
             }
 
+            // 配置のしかた（前の画面から送られてくる randomPlacement にも対応）
+            const placementMode = data.placementMode || (data.randomPlacement ? "random" : "manual");
+
+            // 配置AI（placers フォルダにあって、コンパイルできたものだけ使う。なければランダム）
+            const findPlacer = file => placerList.find(p => p.file === file && p.ok) || null;
+            const placerA = placementMode === "ai" ? findPlacer(data.sente.placer) : null;
+            const placerB = placementMode === "ai" ? findPlacer(data.gote.placer) : null;
+
+            // 名前：配置AIを使うときは「エンジン名（配置: random.cpp）」
+            const label = (name, placer) => placementMode === "ai"
+                ? `${name}（配置: ${placer ? placer.file : "ランダム"}）`
+                : name;
+
             // 1局目の先手を A、後手を B と呼ぶ（先後を入れ替えても、どちらのエンジンか分かるように）
             const players = {
-                A: { name: firstInfo.name, path: enginePath(firstInfo.file), options: data.sente.options || {} },
-                B: { name: secondInfo.name, path: enginePath(secondInfo.file), options: data.gote.options || {} },
+                A: { name: label(firstInfo.name, placerA), path: enginePath(firstInfo.file), options: data.sente.options || {} },
+                B: { name: label(secondInfo.name, placerB), path: enginePath(secondInfo.file), options: data.gote.options || {} },
             };
 
             const games = Math.min(Math.max(Number(data.games) || 1, 1), 1000);
@@ -171,32 +192,51 @@ wss.on("connection", ws => {
             // 1手指すたびに、画面に送る
             manager.on("move", move => send(ws, { type: "move", ...move }));
 
+            // 配置で1枚置くたびに、画面に送る
+            manager.on("place", place => send(ws, { type: "place", ...place }));
+
             // 結果を書き出すファイル（results/20261031-164012.csv）
             fs.mkdirSync(RESULTS_DIR, { recursive: true });
             const fileName = timestamp() + ".csv";
             const filePath = path.join(RESULTS_DIR, fileName);
             fs.writeFileSync(filePath,
-                "﻿" + ["対局", "先手", "後手", "勝ち", "理由", "手数", "開始局面", "指し手"].map(csvField).join(",") + "\n");
+                "﻿" + ["対局", "先手", "後手", "勝ち", "理由", "手数", "開始局面", "配置", "指し手"].map(csvField).join(",") + "\n");
 
             // 集計
             const summary = { A: 0, B: 0, draw: 0, games: 0, totalMoves: 0 };
 
             try {
                 await manager.startEngines(players.A, players.B);
+                manager.startPlacers(placerA && placerPath(placerA.file), placerB && placerPath(placerB.file));
 
                 let aIsSente = true;   // 今の対局で A が先手か
 
                 for (let game = 1; game <= games; game++) {
 
-                    const sfen = data.randomPlacement ? randomPlacementSfen() : placedSfen;
                     const senteName = aIsSente ? "A" : "B";
                     const goteName = aIsSente ? "B" : "A";
+                    const isAi = placementMode === "ai";
+
+                    // 開始局面：配置AIが配置するときは、まず歩だけの局面から始める
+                    let sfen = placementMode === "random" ? randomPlacementSfen()
+                             : isAi ? PLACEMENT_START_SFEN
+                             : placedSfen;
 
                     send(ws, {
-                        type: "started", game, total: games, sfen,
+                        type: "started", game, total: games, sfen, placing: isAi,
                         sente: `${senteName}: ${players[senteName].name}`,
                         gote: `${goteName}: ${players[goteName].name}`,
                     });
+
+                    // 配置AIに1枚ずつ交互に配置させる
+                    let places = [];
+                    if (isAi) {
+                        const placed = await manager.placePieces();
+                        if (!placed) break;   // 配置の途中で中断された
+                        sfen = placed.sfen;
+                        places = placed.places;
+                        send(ws, { type: "placed", sfen });
+                    }
 
                     const result = await manager.playGame(sfen);
 
@@ -219,6 +259,7 @@ wss.on("connection", ws => {
                         result.reason,
                         result.moves.length,
                         sfen,
+                        places.join(" "),
                         result.moves.join(" "),
                     ].map(csvField).join(",") + "\n");
 

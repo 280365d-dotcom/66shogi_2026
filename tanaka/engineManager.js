@@ -23,6 +23,7 @@ class EngineManager extends EventEmitter {
         this.byoyomi = byoyomi;
         this.maxMoves = maxMoves;
         this.engines = { sente: null, gote: null };
+        this.placers = { sente: null, gote: null };   // 配置AI（使わない側は null）
         this.stopped = false;
     }
 
@@ -41,6 +42,82 @@ class EngineManager extends EventEmitter {
             this.engines.sente.init({ ...VARIANT_OPTIONS, ...(senteConfig.options || {}) }),
             this.engines.gote.init({ ...VARIANT_OPTIONS, ...(goteConfig.options || {}) }),
         ]);
+    }
+
+    // 配置フェーズ：先手から1枚ずつ交互に、配置AIに駒を置かせる
+    // 結果 { sfen: 配置が終わった局面, places: ["K*4f", "k*3a", ...] } を返す
+    async placePieces() {
+
+        // 一番手前の段（左から6マス、空きは null）と、まだ置いていない駒
+        const rows = { sente: Array(6).fill(null), gote: Array(6).fill(null) };
+        const remaining = { sente: [...PLACE_PIECES], gote: [...PLACE_PIECES] };
+        const places = [];
+        let side = "sente";
+
+        while (remaining.sente.length > 0 || remaining.gote.length > 0) {
+
+            if (this.stopped) return null;
+
+            const startTime = Date.now();
+
+            // 配置AIに次の1枚を聞く（配置AIがない・返事がおかしいときはランダム）
+            let place = null;
+            if (this.placers[side]) {
+                try {
+                    place = await this.placeWithTimeout(this.placers[side],
+                        rowToSfen(rows.gote, "gote"), rowToSfen(rows.sente, "sente"), side);
+                } catch (err) {
+                    place = null;
+                }
+            }
+
+            let random = false;
+            if (!isValidPlace(place, side, rows[side], remaining[side])) {
+                place = randomPlace(side, rows[side], remaining[side]);
+                random = true;
+            }
+
+            // 盤に置いて、残りの駒から消す（飛か角を置いたら、もう片方も消す）
+            const piece = place[0];
+            const col = 6 - Number(place[2]);
+            rows[side][col] = piece;
+            removePiece(remaining[side], piece);
+
+            // 記録は後手を小文字にする  例: 先手 "K*4f"、後手 "k*3a"
+            places.push(side === "sente" ? place : place[0].toLowerCase() + place.slice(1));
+            this.emit("place", { side, place, random, ply: places.length });
+
+            // 画面で見やすいように、最低の時間だけ待つ
+            const elapsed = Date.now() - startTime;
+            if (elapsed < this.minMoveTime) {
+                await new Promise(resolve => setTimeout(resolve, this.minMoveTime - elapsed));
+            }
+
+            // 相手にまだ置く駒があれば、相手の番
+            if (remaining[opponent(side)].length > 0) side = opponent(side);
+        }
+
+        const sfen = `${rowToSfen(rows.gote, "gote")}/pppppp/6/6/PPPPPP/${rowToSfen(rows.sente, "sente")} b - 1`;
+        return { sfen, places };
+    }
+
+    // 配置AIに配置を聞く。時間内に返ってこなければエラーにする
+    placeWithTimeout(engine, goteRow, senteRow, side) {
+        return Promise.race([
+            engine.place(goteRow, senteRow, side),
+            new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 5000)),
+        ]);
+    }
+
+    // 配置AIを起動する。使わない側は null を渡す
+    // 例: startPlacers("placers/build/random", null)
+    startPlacers(sentePath, gotePath) {
+        for (const [side, placerPath] of [["sente", sentePath], ["gote", gotePath]]) {
+            if (!placerPath) continue;
+            const placer = new Engine(placerPath, { log: this.log });
+            placer.start();
+            this.placers[side] = placer;
+        }
     }
 
     // 1局指す。startSfen は配置が終わったあとの局面
@@ -131,6 +208,7 @@ class EngineManager extends EventEmitter {
     // 先手と後手のエンジンを入れ替える（連続対局で先後を交代するため）
     swapSides() {
         [this.engines.sente, this.engines.gote] = [this.engines.gote, this.engines.sente];
+        [this.placers.sente, this.placers.gote] = [this.placers.gote, this.placers.sente];
     }
 
     // 対局を途中で止める（次の手番で止まる）
@@ -138,12 +216,16 @@ class EngineManager extends EventEmitter {
         this.stopped = true;
     }
 
-    // 両方のエンジンを終了する
+    // 両方のエンジンと配置AIを終了する
     stopEngines() {
         for (const side of ["sente", "gote"]) {
             if (this.engines[side]) {
                 this.engines[side].stop();
                 this.engines[side] = null;
+            }
+            if (this.placers[side]) {
+                this.placers[side].stop();
+                this.placers[side] = null;
             }
         }
     }
@@ -157,6 +239,56 @@ function sideName(side) {
 // 相手の側
 function opponent(side) {
     return side === "sente" ? "gote" : "sente";
+}
+
+// =========================
+// 配置フェーズで使う関数
+// =========================
+
+// 配置する駒（飛と角はどちらか片方だけ使う）
+const PLACE_PIECES = ["K", "G", "S", "N", "L", "R", "B"];
+
+// 一番手前の段を SFEN の書き方にする  例: ["L", null, "G", null, null, null] → "L1G3"（後手は小文字）
+function rowToSfen(row, side) {
+    let text = "";
+    let empty = 0;
+    for (const piece of row) {
+        if (piece === null) {
+            empty++;
+            continue;
+        }
+        if (empty > 0) text += empty;
+        empty = 0;
+        text += side === "gote" ? piece.toLowerCase() : piece;
+    }
+    if (empty > 0) text += empty;
+    return text;
+}
+
+// エンジンの返事が、ルールどおりの配置か調べる  例: 先手なら "K*4f"
+function isValidPlace(place, side, row, remaining) {
+    if (typeof place !== "string" || !/^[KGSNLRB]\*[1-6][af]$/.test(place)) return false;
+    if (!remaining.includes(place[0])) return false;              // もう置いた駒
+    if (place[3] !== (side === "sente" ? "f" : "a")) return false; // 自分の一番手前の段ではない
+    return row[6 - Number(place[2])] === null;                     // 空いているマスか
+}
+
+// ランダムに1枚置く（エンジンが配置に対応していないときの代わり）
+function randomPlace(side, row, remaining) {
+    const piece = remaining[Math.floor(Math.random() * remaining.length)];
+    const empties = [];
+    for (let col = 0; col < 6; col++) {
+        if (row[col] === null) empties.push(col);
+    }
+    const col = empties[Math.floor(Math.random() * empties.length)];
+    return `${piece}*${6 - col}${side === "sente" ? "f" : "a"}`;
+}
+
+// 置いた駒を一覧から消す。飛か角を置いたら、もう片方も消す
+function removePiece(list, piece) {
+    list.splice(list.indexOf(piece), 1);
+    const other = piece === "R" ? "B" : piece === "B" ? "R" : null;
+    if (other && list.includes(other)) list.splice(list.indexOf(other), 1);
 }
 
 module.exports = EngineManager;
