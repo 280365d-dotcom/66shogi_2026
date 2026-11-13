@@ -15,7 +15,6 @@ const senteSelect = document.getElementById("sente-engine");
 const goteSelect = document.getElementById("gote-engine");
 const sentePlacerSelect = document.getElementById("sente-placer");
 const gotePlacerSelect = document.getElementById("gote-placer");
-const placerErrors = document.getElementById("placer-errors");
 const senteOptions = document.getElementById("sente-options");
 const goteOptions = document.getElementById("gote-options");
 const refreshButton = document.getElementById("refresh-button");
@@ -227,7 +226,7 @@ ws.onmessage = e => {
         draw();
     }
 
-    // 配置AIの一覧 → メニューを作る（コンパイルできなかったものは選べない）
+    // 配置AIの一覧 → メニューを作る
     if (data.type === "placers") {
         for (const select of [sentePlacerSelect, gotePlacerSelect]) {
             const before = select.value;
@@ -241,18 +240,12 @@ ws.onmessage = e => {
             for (const placer of data.list) {
                 const option = document.createElement("option");
                 option.value = placer.file;
-                option.textContent = placer.ok ? placer.file : `${placer.file}（コンパイル失敗）`;
-                option.disabled = !placer.ok;
+                option.textContent = placer.file;
                 select.appendChild(option);
             }
-            if (data.list.some(p => p.file === before && p.ok)) select.value = before;
+            if (data.list.some(p => p.file === before)) select.value = before;
         }
 
-        // コンパイルエラーがあれば、その内容を表示する
-        placerErrors.textContent = data.list
-            .filter(p => !p.ok)
-            .map(p => `【${p.file} のコンパイルエラー】\n${p.error}`)
-            .join("\n");
         draw();
     }
 

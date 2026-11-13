@@ -1,56 +1,41 @@
 // =========================
-// placers フォルダにある配置AI（.cpp）を調べて、コンパイルする
+// placers フォルダにある配置AI（実行ファイル）を調べて、一覧にする
+//   エンジンの engines フォルダと同じ考え方。自分でコンパイルした実行ファイルを入れておく
+//   例: g++ -O2 -std=c++17 -o placers/random placers/random.cpp
 // =========================
 const fs = require("fs");
 const path = require("path");
-const { execFile } = require("child_process");
 
-const PLACER_DIR = path.join(__dirname, "placers");        // .cpp を入れるフォルダ
-const BUILD_DIR = path.join(PLACER_DIR, "build");          // コンパイルしたプログラムを置くフォルダ
-const COMPILER = process.env.CXX || "g++";                 // 使うコンパイラ（Mac の g++ は clang++ と同じもの）
-const EXE = process.platform === "win32" ? ".exe" : "";    // Windows は .exe が付く
+const PLACER_DIR = path.join(__dirname, "placers");   // 配置AIを入れるフォルダ
 
-// .cpp をコンパイルする。成功したら null、失敗したらエラーの文を返す
-function compile(source, output) {
-    return new Promise(resolve => {
-        // placers フォルダの中で実行する（エラーの文に長いフォルダ名が出ないように）
-        execFile(COMPILER, ["-O2", "-std=c++17", "-o", output, path.basename(source)], { cwd: PLACER_DIR }, (err, stdout, stderr) => {
-            resolve(err ? (stderr || err.message) : null);
-        });
-    });
-}
-
-// placers フォルダの .cpp を一覧にする。プログラムが古ければ（.cpp のほうが新しければ）コンパイルし直す
-// 返すもの: [{ file: "random.cpp", ok: true, error: null }, ...]
-async function listPlacers() {
-
-    fs.mkdirSync(BUILD_DIR, { recursive: true });
-
-    const files = fs.readdirSync(PLACER_DIR).filter(f => f.endsWith(".cpp")).sort();
-    const list = [];
-
-    for (const file of files) {
-        const source = path.join(PLACER_DIR, file);
-        const output = placerPath(file);
-
-        let error = null;
-        const needBuild = !fs.existsSync(output)
-            || fs.statSync(output).mtimeMs < fs.statSync(source).mtimeMs;
-
-        if (needBuild) {
-            console.log("配置AIをコンパイルします:", file);
-            error = await compile(source, output);
-            if (error) console.error(`${file} のコンパイルに失敗しました\n${error}`);
-        }
-
-        list.push({ file, ok: error === null, error });
+// 実行ファイルかどうか調べる
+//   Windows は .exe で終わるもの、Mac・Linux は「実行してよい」許可がついているもの
+function isExecutable(filePath) {
+    if (!fs.statSync(filePath).isFile()) return false;          // フォルダは除く
+    if (process.platform === "win32") return filePath.endsWith(".exe");
+    try {
+        fs.accessSync(filePath, fs.constants.X_OK);
+        return true;
+    } catch (err) {
+        return false;                                            // .cpp など、実行できないファイル
     }
-    return list;
 }
 
-// "random.cpp" → コンパイルしたプログラムの場所（placers/build/random）
+// placers フォルダの実行ファイルを一覧にする
+// 返すもの: [{ file: "random", ok: true }, ...]
+function listPlacers() {
+    if (!fs.existsSync(PLACER_DIR)) return [];
+
+    return fs.readdirSync(PLACER_DIR)
+        .filter(file => !file.startsWith("."))                  // .DS_Store などの隠しファイルは除く
+        .filter(file => isExecutable(path.join(PLACER_DIR, file)))
+        .sort()
+        .map(file => ({ file, ok: true }));
+}
+
+// "random" → 配置AIの場所（placers/random）
 function placerPath(file) {
-    return path.join(BUILD_DIR, path.basename(file, ".cpp") + EXE);
+    return path.join(PLACER_DIR, path.basename(file));
 }
 
 module.exports = { listPlacers, placerPath };
