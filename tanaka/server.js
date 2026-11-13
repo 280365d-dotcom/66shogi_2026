@@ -113,11 +113,11 @@ wss.on("connection", ws => {
     console.log("画面がつながりました");
 
     // engines フォルダを調べて、エンジンの一覧を画面に知らせる
-    // あわせて placers フォルダの .cpp をコンパイルして、配置AIの一覧も知らせる
+    // あわせて placers フォルダの実行ファイルを調べて、配置AIの一覧も知らせる
     async function sendEngineList() {
         engineList = await listEngines();
         send(ws, { type: "engines", list: engineList });
-        placerList = await listPlacers();
+        placerList = listPlacers();
         send(ws, { type: "placers", list: placerList });
     }
 
@@ -163,7 +163,7 @@ wss.on("connection", ws => {
             // 配置のしかた（前の画面から送られてくる randomPlacement にも対応）
             const placementMode = data.placementMode || (data.randomPlacement ? "random" : "manual");
 
-            // 配置AI（placers フォルダにあって、コンパイルできたものだけ使う。なければランダム）
+            // 配置AI（placers フォルダにあるものだけ使う。なければランダム）
             const findPlacer = file => placerList.find(p => p.file === file && p.ok) || null;
             const placerA = placementMode === "ai" ? findPlacer(data.sente.placer) : null;
             const placerB = placementMode === "ai" ? findPlacer(data.gote.placer) : null;
