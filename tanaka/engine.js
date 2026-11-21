@@ -9,6 +9,7 @@ class Engine {
         this.process = null;
         this.buffer = "";          // 途中で切れた行を溜めておく場所
         this.listeners = [];       // 1行届くたびに呼ぶ関数の一覧
+        this.evaluation = "不明";  // 使っている評価関数（「NNUE（66shogi.nnue）」か「クラシカル」）
     }
 
     // 実行プログラム（process）の起動
@@ -24,6 +25,15 @@ class Engine {
                 const line = raw.trim();               // Windows の \r も取り除く
                 if (line === "") continue;
                 if (this.log) console.log("[ENGINE]", line);
+
+                // どの評価関数を使っているかを覚えておく（go のたびにエンジンが知らせてくる）
+                //   例: info string NNUE evaluation using 66shogi.nnue enabled
+                //       info string classical evaluation enabled
+                if (line.startsWith("info string NNUE evaluation using")) {
+                    this.evaluation = "NNUE（" + line.split(" ")[5] + "）";
+                } else if (line.startsWith("info string classical evaluation")) {
+                    this.evaluation = "クラシカル";
+                }
                 for (const listener of [...this.listeners]) {
                     listener(line);
                 }

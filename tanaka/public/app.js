@@ -49,6 +49,9 @@ let board = null;
 // 今の対局の名前（「第1局／10局　先手 … ／ 後手 …」）
 let gameTitle = "";
 
+// それぞれの側が使っている評価関数（最初の手を指すまでは分からない）
+let evaluations = { sente: "？", gote: "？" };
+
 // engines フォルダにあるエンジンの一覧（サーバーから届く）
 let engineList = [];
 
@@ -260,6 +263,7 @@ ws.onmessage = e => {
         kifuList.innerHTML = "";
         draw();
         gameTitle = `第${data.game}局／${data.total}局　先手 ${data.sente} ／ 後手 ${data.gote}`;
+        evaluations = { sente: "？", gote: "？" };
         statusText.textContent = (data.placing ? "配置中：" : "対局中：") + gameTitle;
     }
 
@@ -285,6 +289,12 @@ ws.onmessage = e => {
 
     // 1手指された → 盤面に反映して描き直し、棋譜に追加する
     if (data.type === "move") {
+        // 使っている評価関数を、上の状態表示に出す
+        if (data.evaluation) {
+            evaluations[data.side] = data.evaluation;
+            statusText.textContent = "対局中：" + gameTitle
+                + `　評価関数：▲${evaluations.sente}／△${evaluations.gote}`;
+        }
         const text = board.apply(data.move, data.side);
         draw();
         addKifu((data.side === "sente" ? "▲" : "△") + text);
@@ -316,7 +326,10 @@ ws.onmessage = e => {
 function addResult(data) {
     const row = document.createElement("tr");
     const winner = data.winner ? data.winner : "引き分け";
-    for (const text of [data.game, data.sente, data.gote, winner, data.reason, data.moves]) {
+    // 先手・後手の名前のうしろに、使った評価関数をつける  例: 「A: Fairy-Stockfish ［NNUE（66shogi.nnue）］」
+    const sente = data.sente + (data.senteEvaluation ? `［${data.senteEvaluation}］` : "");
+    const gote = data.gote + (data.goteEvaluation ? `［${data.goteEvaluation}］` : "");
+    for (const text of [data.game, sente, gote, winner, data.reason, data.moves]) {
         const cell = document.createElement("td");
         cell.textContent = text;
         row.appendChild(cell);

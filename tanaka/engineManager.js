@@ -49,9 +49,9 @@ class EngineManager extends EventEmitter {
     async placePieces() {
 
         // 一番手前の段（左から6マス、空きは null）と、まだ置いていない駒
-        const rows = { sente: Array(6).fill(null), gote: Array(6).fill(null) }; // 先手・後手のいちばん手前の段
-        const remaining = { sente: [...PLACE_PIECES], gote: [...PLACE_PIECES] }; // まだ置いてないコマ
-        const places = []; // 記録用
+        const rows = { sente: Array(6).fill(null), gote: Array(6).fill(null) };
+        const remaining = { sente: [...PLACE_PIECES], gote: [...PLACE_PIECES] };
+        const places = [];
         let side = "sente";
 
         while (remaining.sente.length > 0 || remaining.gote.length > 0) {
@@ -60,7 +60,7 @@ class EngineManager extends EventEmitter {
 
             const startTime = Date.now();
 
-            // 今の段を送って配置AIに次の1枚を聞く（配置AIがない・返事がおかしいときはランダム）
+            // 配置AIに次の1枚を聞く（配置AIがない・返事がおかしいときはランダム）
             let place = null;
             if (this.placers[side]) {
                 try {
@@ -78,10 +78,10 @@ class EngineManager extends EventEmitter {
             }
 
             // 盤に置いて、残りの駒から消す（飛か角を置いたら、もう片方も消す）
-            const piece = place[0];             // "S*4f" → "S"（置く駒）
-            const col = 6 - Number(place[2]);   // "S*4f" → 4筋 → 左から 2番目
-            rows[side][col] = piece;            // 段に置く
-            removePiece(remaining[side], piece); // 残りの駒から消す
+            const piece = place[0];
+            const col = 6 - Number(place[2]);
+            rows[side][col] = piece;
+            removePiece(remaining[side], piece);
 
             // 記録は後手を小文字にする  例: 先手 "K*4f"、後手 "k*3a"
             places.push(side === "sente" ? place : place[0].toLowerCase() + place.slice(1));
@@ -176,7 +176,7 @@ class EngineManager extends EventEmitter {
 
             // 手を棋譜に追加して、相手の手番へ
             moves.push(move);
-            this.emit("move", { side: turn, move, ply: moves.length });
+            this.emit("move", { side: turn, move, ply: moves.length, evaluation: this.engines[turn].evaluation });
             turn = opponent(turn);
         }
     }
@@ -200,7 +200,13 @@ class EngineManager extends EventEmitter {
             engine.send("gameover " + result);
         }
 
-        const result = { winner, reason, moves };
+        // それぞれの側が使った評価関数
+        const evaluation = {
+            sente: this.engines.sente ? this.engines.sente.evaluation : "不明",
+            gote: this.engines.gote ? this.engines.gote.evaluation : "不明",
+        };
+
+        const result = { winner, reason, moves, evaluation };
         this.emit("end", result);
         return result;
     }

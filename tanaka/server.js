@@ -200,7 +200,7 @@ wss.on("connection", ws => {
             const fileName = timestamp() + ".csv";
             const filePath = path.join(RESULTS_DIR, fileName);
             fs.writeFileSync(filePath,
-                "﻿" + ["対局", "先手", "後手", "勝ち", "理由", "手数", "開始局面", "配置", "指し手"].map(csvField).join(",") + "\n");
+                "﻿" + ["対局", "先手", "後手", "先手の評価関数", "後手の評価関数", "勝ち", "理由", "手数", "開始局面", "配置", "指し手"].map(csvField).join(",") + "\n");
 
             // 集計
             const summary = { A: 0, B: 0, draw: 0, games: 0, totalMoves: 0 };
@@ -255,6 +255,8 @@ wss.on("connection", ws => {
                         game,
                         `${senteName}: ${players[senteName].name}`,
                         `${goteName}: ${players[goteName].name}`,
+                        result.evaluation.sente,
+                        result.evaluation.gote,
                         winner ? `${winner}: ${players[winner].name}` : "引き分け",
                         result.reason,
                         result.moves.length,
@@ -269,6 +271,8 @@ wss.on("connection", ws => {
                         gote: `${goteName}: ${players[goteName].name}`,
                         winner: winner ? `${winner}: ${players[winner].name}` : null,
                         winnerSide: result.winner,
+                        senteEvaluation: result.evaluation.sente,
+                        goteEvaluation: result.evaluation.gote,
                         reason: result.reason,
                         moves: result.moves.length,
                     });
