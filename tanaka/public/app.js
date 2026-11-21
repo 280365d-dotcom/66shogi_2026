@@ -53,7 +53,7 @@ let gameTitle = "";
 let engineList = [];
 
 // 画面に出さないオプション（66将棋の設定やファイルの場所など、GUI が自動で決めるもの）
-const HIDDEN_OPTIONS = ["VariantPath", "USI_Variant", "Debug_Log_File", "EvalFile", "SyzygyPath"];
+const HIDDEN_OPTIONS = ["VariantPath", "USI_Variant", "Debug_Log_File", "SyzygyPath"];
 
 // =========================
 // エンジンのオプション
@@ -70,7 +70,7 @@ function renderOptions(select, element) {
     for (const option of engine.options) {
 
         if (HIDDEN_OPTIONS.includes(option.name)) continue;
-        if (!["check", "spin", "combo"].includes(option.type)) continue;
+        if (!["check", "spin", "combo", "string"].includes(option.type)) continue;
 
         const label = document.createElement("label");
         label.textContent = option.name;
@@ -86,6 +86,10 @@ function renderOptions(select, element) {
             input.value = option.default;
             if (option.min !== null) input.min = option.min;
             if (option.max !== null) input.max = option.max;
+        } else if (option.type === "string") {
+            input = document.createElement("input");     // 文字を入れる欄
+            input.type = "text";
+            input.value = option.default;
         } else {
             input = document.createElement("select");
             for (const value of option.vars) {
